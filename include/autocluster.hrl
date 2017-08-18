@@ -20,6 +20,9 @@
          {config, longname,              "RABBITMQ_USE_LONGNAME",  false,        atom,    false},
          {config, node_name,             "RABBITMQ_NODENAME",      "rabbit",     string,  false},
          {config, node_type,             "RABBITMQ_NODE_TYPE",     disc,         atom,    false},
+         {config, http_proxy,            "HTTP_PROXY",            "undefined",   string,  false},
+         {config, https_proxy,           "HTTPS_PROXY",           "undefined",   string,  false},
+         {config, no_proxy,              "NO_PROXY",              "undefined",   string,  false},
 
          {config, aws_autoscaling,       "AWS_AUTOSCALING",        false,        atom,    false}, %% AWS
          {config, aws_ec2_tags,          "AWS_EC2_TAGS",           [],           proplist,  false},

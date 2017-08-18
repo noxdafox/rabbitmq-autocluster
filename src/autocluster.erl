@@ -188,6 +188,7 @@ get_run_steps_state() ->
 %%--------------------------------------------------------------------
 -spec initialize_backend(#startup_state{}) -> {ok, #startup_state{}} | {error, iolist()}.
 initialize_backend(State) ->
+  ok = maybe_configure_proxy(),
   case detect_backend(autocluster_config:get(backend)) of
     {ok, Name, Mod} ->
       {ok, State#startup_state{backend_name = Name, backend_module = Mod}};
@@ -584,3 +585,59 @@ with_stopped_app(Fun) ->
     ensure_app_stopped(),
     Fun(),
     ensure_app_running().
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Configure http proxy options if specified in configuration.
+%% @end
+%%--------------------------------------------------------------------
+-spec maybe_configure_proxy() -> ok.
+maybe_configure_proxy() ->
+  NoProxy = autocluster_config:get(no_proxy),
+  ok = maybe_set_proxy(proxy, autocluster_config:get(http_proxy), NoProxy),
+  ok = maybe_set_proxy(https_proxy, autocluster_config:get(https_proxy), NoProxy),
+  ok.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Set httpc proxy options.
+%% @end
+%%--------------------------------------------------------------------
+-spec maybe_set_proxy(Option :: atom(),
+                      ProxyUrl :: string(),
+                      NoProxy :: string()) -> ok | {error, Reason :: term()}.
+maybe_set_proxy(_Option, "undefined", _NoProxy) -> ok;
+maybe_set_proxy(Option, ProxyUrl, NoProxy) ->
+  case parse_proxy_uri(Option, ProxyUrl) of
+    {ok, {_Scheme, _UserInfo, Host, Port, _Path, _Query}} ->
+      autocluster_log:debug(
+        "Configuring ~s: ~p, no_proxy: ~p", [Option, {Host, Port}, get_no_proxy(NoProxy)]),
+      httpc:set_options([{Option, {{Host, Port}, get_no_proxy(NoProxy)}}]);
+    {error, Reason} -> {error, Reason}
+  end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Create list of no_proxy hosts in comma separated list string.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_no_proxy(NoProxy :: string()) -> list().
+get_no_proxy("undefined") -> [];
+get_no_proxy(NoProxy) ->
+  [string:strip(S) || S <- string:tokens(NoProxy, ",")].
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc Support defining proxy address with or without uri scheme.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_proxy_uri(ProxyType :: atom(), ProxyUrl :: string()) -> tuple().
+parse_proxy_uri(ProxyType, ProxyUrl) ->
+  case http_uri:parse(ProxyUrl) of
+    {ok, Result} -> {ok, Result};
+    {error, _} ->
+      case ProxyType of
+        proxy -> http_uri:parse("http://" ++ ProxyUrl);
+        https_proxy -> http_uri:parse("https://" ++ ProxyUrl)
+      end
+  end.
