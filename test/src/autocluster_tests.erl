@@ -58,6 +58,24 @@ initialize_backend_starts_required_apps_test_() ->
         ?assert(meck:called(application, ensure_all_started, '_'))
     end).
 
+initialize_backend_with_proxy_test_() ->
+  autocluster_testing:with_mock(
+    [{application, [unstick, passthrough]}],
+    fun () ->
+        meck:expect(application, ensure_all_started, fun (rabbitmq_aws) -> ok end),
+        autocluster_testing:reset(),
+        os:putenv("AUTOCLUSTER_TYPE", "aws"),
+        os:putenv("HTTP_PROXY", "foobar.com"),
+        os:putenv("HTTPS_PROXY", "foobar.com"),
+        os:putenv("NO_PROXY", "10.10.10.10"),
+        inets:start(),
+        {ok, _} = autocluster:initialize_backend(#startup_state{}),
+        {ok, {{"foobar.com", 80}, ["10.10.10.10"]}} = httpc:get_option(proxy),
+        {ok, {{"foobar.com", 443}, ["10.10.10.10"]}} = httpc:get_option(https_proxy),
+        ?assert(meck:called(application, ensure_all_started, '_')),
+        inets:stop()
+    end).
+
 initialize_backend_update_required_fields_for_all_known_backends_test_() ->
   Cases = [{aws, autocluster_aws}
           ,{consul, autocluster_consul}
